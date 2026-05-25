@@ -1,0 +1,159 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend_net
+
+  backend:
+    build:
+      context: ../monopetsky-backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: ${BACKEND_PORT}
+      RUN_MIGRATIONS_ON_BOOT: ${RUN_MIGRATIONS_ON_BOOT}
+      NODE_ENV: production
+      # Public base URL the backend prefixes onto upload URLs so cross-origin <img> works.
+      UPLOAD_PUBLIC_BASE_URL: https://${PUBLIC_BACKEND_HOST}
+      # Web Push (VAPID) keys — see README. Backend silently disables push if these are missing.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_backups:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${BACKEND_PORT}/health > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - backend_net
+      - web_net
+
+  frontend:
+    build:
+      context: ../monopetsky-frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: ${FRONTEND_PORT}
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      - backend
+    networks:
+      - web_net
+
+  cms:
+    build:
+      context: ../monopetsky-cms
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: ${CMS_PORT}
+      HOSTNAME: 0.0.0.0
+      # JWT_SECRET is shared with the backend so the CMS middleware can verify access cookies.
+      JWT_SECRET: ${JWT_SECRET}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    depends_on:
+      - backend
+    networks:
+      - web_net
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - letsencrypt_www:/var/www/certbot:ro
+    depends_on:
+      - frontend
+      - cms
+      - backend
+    networks:
+      - web_net
+
+  certbot:
+    image: certbot/certbot:v3.0.1
+    restart: unless-stopped
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - letsencrypt_www:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      PGHOST: postgres
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS}
+    volumes:
+      - db_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "[db-backup] retention=$$BACKUP_RETENTION_DAYS days, daily at 02:00 UTC"
+        while :; do
+          NOW=$$(date -u +%H%M)
+          if [ "$$NOW" = "0200" ]; then
+            FILE=/backups/backup-$$(date -u +%Y%m%d-%H%M%S).sql.gz
+            echo "[db-backup] $$(date -u) writing $$FILE"
+            pg_dump --no-owner --no-privileges | gzip > "$$FILE" || echo "[db-backup] FAILED"
+            find /backups -name "backup-*.sql.gz" -mtime +$$BACKUP_RETENTION_DAYS -delete
+            sleep 60
+          fi
+          sleep 30
+        done
+    networks:
+      - backend_net
+
+volumes:
+  postgres_data:
+  backend_uploads:
+  backend_backups:
+  db_backups:
+  letsencrypt:
+  letsencrypt_www:
+
+networks:
+  backend_net:
+    driver: bridge
+    internal: false
+  web_net:
+    driver: bridge

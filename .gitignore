@@ -1,0 +1,27 @@
+# Env files (real secrets)
+.env
+.env.staging
+.env.prod
+.env.local
+.env.*.local
+
+# Rendered nginx config (output of scripts/configure-nginx.sh).
+# The .template file is committed; the rendered .conf is operator-local.
+nginx/conf.d/monopetsky.conf
+
+# Runtime data
+volumes/
+!volumes/.gitkeep
+postgres-data/
+uploads/
+backups/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Logs
+*.log
+logs/

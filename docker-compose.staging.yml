@@ -1,0 +1,46 @@
+services:
+  backend:
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-4001}:${BACKEND_PORT:-4001}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3010}:${FRONTEND_PORT:-3010}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  cms:
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${CMS_PORT:-3011}:${CMS_PORT:-3011}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  nginx:
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

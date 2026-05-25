@@ -1,0 +1,15 @@
+# docker-compose.tunnel.yml
+# -------------------------------------------------------------------
+# Override for setups where the operator runs `cloudflared` on the host
+# instead of terminating TLS in nginx. Pushes nginx + certbot into the
+# disabled profile.
+#
+# Usage:
+#   ./scripts/deploy.sh prod --tunnel
+# -------------------------------------------------------------------
+
+services:
+  nginx:
+    profiles: ["disabled"]
+  certbot:
+    profiles: ["disabled"]

@@ -1,0 +1,32 @@
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+
+  backend:
+    environment:
+      NODE_ENV: development
+    ports:
+      - "${BACKEND_PORT:-5050}:${BACKEND_PORT:-5050}"
+
+  frontend:
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    ports:
+      - "${FRONTEND_PORT:-5002}:${FRONTEND_PORT:-5002}"
+
+  cms:
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    ports:
+      - "${CMS_PORT:-5001}:${CMS_PORT:-5001}"
+
+  # nginx, certbot, db-backup not needed in dev — push into disabled profile so they don't start.
+  nginx:
+    profiles: ["disabled"]
+  certbot:
+    profiles: ["disabled"]
+  db-backup:
+    profiles: ["disabled"]

@@ -316,9 +316,10 @@ If you ingress via a host-side `cloudflared` instead of nginx + Let's Encrypt, C
 
 - Cloudflare SSL/TLS mode set to **Full**
 
-**Deploy with the `--tunnel` flag:**
+**Deploy** (env file still required for database/JWT/port config — no tunnel-specific vars needed):
 
 ```sh
+./scripts/configure-env.sh prod   # first time only
 ./scripts/deploy.sh prod --tunnel
 ```
 

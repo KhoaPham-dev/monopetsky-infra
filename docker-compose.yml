@@ -30,6 +30,9 @@ services:
       NODE_ENV: production
       # Public base URL the backend prefixes onto upload URLs so cross-origin <img> works.
       UPLOAD_PUBLIC_BASE_URL: https://${PUBLIC_BACKEND_HOST}
+      # CORS — allowed origins for storefront and CMS
+      CORS_ORIGIN_STOREFRONT: ${CORS_ORIGIN_STOREFRONT:-}
+      CORS_ORIGIN_CMS: ${CORS_ORIGIN_CMS:-}
       # Web Push (VAPID) keys — see README. Backend silently disables push if these are missing.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}

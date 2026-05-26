@@ -299,46 +299,24 @@ scripts/restore-db.sh           # Restore from backup (destructive)
 scripts/logs.sh                 # Tail compose logs
 ```
 
-## Deploying with Cloudflare Tunnel (host-side cloudflared)
+## Deploying with Cloudflare Tunnel
 
-If `cloudflared` is already running on the host machine (not as a Docker container), nginx and certbot are still used inside the stack — but you point the Cloudflare tunnel ingress rules at `localhost` instead of a public domain.
+`cloudflared` runs on the host and routes public traffic into the stack. nginx still handles internal routing between cloudflared and the containers.
 
-**Setup:**
+Point your tunnel ingress rules at the nginx ports:
 
-1. On the host, install and authenticate `cloudflared`:
-   ```
-   curl -L https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-archive-keyring.gpg
-   # then install cloudflared via apt/yum and run:
-   cloudflared tunnel login
-   cloudflared tunnel create monopetsky
-   ```
+| Public hostname | Tunnel target |
+|----------------|---------------|
+| `example.com` | `http://localhost:80` |
+| `cms.example.com` | `http://localhost:80` |
+| `api.example.com` | `http://localhost:80` |
 
-2. Configure tunnel ingress in `~/.cloudflared/config.yml`:
-   ```yaml
-   tunnel: <tunnel-id>
-   credentials-file: /root/.cloudflared/<tunnel-id>.json
-   ingress:
-     - hostname: example.com
-       service: http://localhost:5002
-     - hostname: cms.example.com
-       service: http://localhost:5001
-     - hostname: api.example.com
-       service: http://localhost:5050
-     - service: http_status:404
-   ```
+Then deploy normally:
 
-3. Run the tunnel as a system service:
-   ```
-   cloudflared service install
-   systemctl start cloudflared
-   ```
-
-4. Deploy the stack normally (no special flag needed — nginx handles internal routing, cloudflared handles public TLS):
-   ```
-   ./scripts/deploy.sh prod
-   ```
-
-   > nginx is still required for internal request routing between cloudflared and the containers. Run `./scripts/configure-nginx.sh` before the first deploy.
+```
+./scripts/configure-nginx.sh   # first time only
+./scripts/deploy.sh prod
+```
 
 ## Notes
 

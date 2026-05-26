@@ -9,8 +9,6 @@
 #   scripts/deploy.sh <staging|prod>              # pull + build + up
 #   scripts/deploy.sh <staging|prod> --no-pull    # skip git pull
 #   scripts/deploy.sh <staging|prod> --no-build   # skip image rebuild
-#   scripts/deploy.sh <staging|prod> --tunnel     # runs cloudflared as a Docker container,
-#                                                 # disables nginx + certbot
 #
 # Assumes the four repos are checked out side-by-side:
 #   ~/monopetsky-infra/     (this repo)
@@ -26,18 +24,16 @@ ENV="${1:-}"
 shift || true
 case "${ENV}" in
     staging|prod) ;;
-    *) echo "Usage: $0 <staging|prod> [--no-pull] [--no-build] [--tunnel]" >&2; exit 1 ;;
+    *) echo "Usage: $0 <staging|prod> [--no-pull] [--no-build]" >&2; exit 1 ;;
 esac
 
 # ---------- Parse remaining flags ----------
 DO_PULL=true
 DO_BUILD=true
-USE_TUNNEL=false
 for arg in "$@"; do
     case "$arg" in
         --no-pull)  DO_PULL=false ;;
         --no-build) DO_BUILD=false ;;
-        --tunnel)   USE_TUNNEL=true ;;
         *) echo "Unknown arg: $arg" >&2; exit 1 ;;
     esac
 done
@@ -55,19 +51,15 @@ if [ ! -f "${ENV_FILE}" ]; then
     exit 1
 fi
 
-if [ "${USE_TUNNEL}" != true ] && [ ! -f "${NGINX_CONF}" ]; then
+if [ ! -f "${NGINX_CONF}" ]; then
     echo "ERROR: ${NGINX_CONF} not found — nginx config has not been rendered." >&2
     echo "       Run: ./scripts/configure-nginx.sh" >&2
-    echo "       Or use --tunnel if you're ingressing via Cloudflare Tunnel." >&2
     exit 1
 fi
 
 cd "${INFRA_DIR}"
 
 COMPOSE=(docker compose -f docker-compose.yml -f "docker-compose.${ENV}.yml" --env-file "${ENV_FILE}")
-if [ "${USE_TUNNEL}" = true ]; then
-    COMPOSE+=(-f docker-compose.tunnel.yml)
-fi
 
 # ---------- Pull latest code ----------
 if [ "${DO_PULL}" = true ]; then
@@ -96,7 +88,7 @@ echo "[deploy] bringing stack up (${ENV})"
 # ---------- Wait for backend health ----------
 echo "[deploy] waiting for backend health..."
 BACKEND_PORT="$(grep -E '^BACKEND_PORT=' "${ENV_FILE}" | cut -d= -f2)"
-BACKEND_PORT="${BACKEND_PORT:-4000}"
+BACKEND_PORT="${BACKEND_PORT:-5050}"
 
 for i in $(seq 1 30); do
     if curl -fsS "http://localhost:${BACKEND_PORT}/health" >/dev/null 2>&1; then

@@ -34,6 +34,8 @@ services:
       # CORS — allowed origins for storefront and CMS
       CORS_ORIGIN_STOREFRONT: ${CORS_ORIGIN_STOREFRONT:-}
       CORS_ORIGIN_CMS: ${CORS_ORIGIN_CMS:-}
+      # Cookie domain — set to .yourdomain.com so cookies work across all subdomains
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       # Web Push (VAPID) keys — see README. Backend silently disables push if these are missing.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}

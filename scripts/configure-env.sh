@@ -120,6 +120,13 @@ else
 fi
 prompt_until_valid "Let's Encrypt contact email" EMAIL is_valid_email
 
+# Derive root domain from FE_HOST: strip leading subdomain if present (e.g. staging.monopetsky.com → monopetsky.com)
+ROOT_DOMAIN="${FE_HOST#*.}"
+# If no dot was stripped (FE_HOST is already the root, e.g. monopetsky.com), keep it as-is
+if [ "${ROOT_DOMAIN}" = "${FE_HOST}" ]; then
+    ROOT_DOMAIN="${FE_HOST}"
+fi
+
 if [ "${ENV}" = "prod" ]; then
     POSTGRES_DB_DEFAULT="monopetsky"
     BACKUP_RETENTION_DAYS="30"
@@ -175,6 +182,10 @@ CMS_PORT=${CMS_PORT}
 # --- CORS ---
 CORS_ORIGIN_STOREFRONT=https://${FE_HOST}
 CORS_ORIGIN_CMS=https://${CMS_HOST}
+
+# --- Cookies ---
+# Leading dot so the cookie is shared across all subdomains (e.g. .monopetsky.com)
+COOKIE_DOMAIN=.${ROOT_DOMAIN}
 
 # --- Public hosts (used by nginx) ---
 PUBLIC_FRONTEND_HOST=${FE_HOST}

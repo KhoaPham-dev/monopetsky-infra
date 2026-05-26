@@ -9,8 +9,8 @@
 #   scripts/deploy.sh <staging|prod>              # pull + build + up
 #   scripts/deploy.sh <staging|prod> --no-pull    # skip git pull
 #   scripts/deploy.sh <staging|prod> --no-build   # skip image rebuild
-#   scripts/deploy.sh <staging|prod> --tunnel     # disables nginx + certbot
-#                                                 # (use a host-side cloudflared)
+#   scripts/deploy.sh <staging|prod> --tunnel     # runs cloudflared as a Docker container,
+#                                                 # disables nginx + certbot
 #
 # Assumes the four repos are checked out side-by-side:
 #   ~/monopetsky-infra/     (this repo)

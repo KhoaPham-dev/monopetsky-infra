@@ -40,16 +40,21 @@ The deploy scripts assume the four repos are checked out side-by-side under the 
    ```
    ./scripts/configure-env.sh prod
    ```
-5. Render nginx config (prompts for the six hostnames):
-   ```
-   ./scripts/configure-nginx.sh
-   ```
-6. Generate VAPID keys and paste them into `.env.prod`:
+5. Generate VAPID keys and paste them into `.env.prod`:
    ```
    npx web-push generate-vapid-keys
    $EDITOR .env.prod   # paste VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY
    ```
-7. Initial Let's Encrypt cert issuance:
+
+**From here, choose your ingress method:**
+
+### Option A — nginx + Let's Encrypt (public IP / port 80+443 open)
+
+6. Render nginx config:
+   ```
+   ./scripts/configure-nginx.sh
+   ```
+7. Issue initial TLS cert:
    ```
    docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d nginx
    docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod run --rm certbot \
@@ -58,9 +63,18 @@ The deploy scripts assume the four repos are checked out side-by-side under the 
        --email <ops-email> --agree-tos --no-eff-email
    docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod restart nginx
    ```
-8. Bring the rest up:
+8. Deploy:
    ```
    ./scripts/deploy.sh prod
+   ```
+
+### Option B — Cloudflare Tunnel (no public ports needed)
+
+> Requires `cloudflared` already installed and connected on the host. See [Alternative ingress: Cloudflare Tunnel](#alternative-ingress-cloudflare-tunnel-no-public-ports-needed) below for tunnel setup.
+
+6. Deploy with `--tunnel` (skips nginx, certbot, and nginx pre-flight check):
+   ```
+   ./scripts/deploy.sh prod --tunnel
    ```
 
 ## VPS prerequisites

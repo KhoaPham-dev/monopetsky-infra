@@ -25,6 +25,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       PORT: ${BACKEND_PORT}
       RUN_MIGRATIONS_ON_BOOT: ${RUN_MIGRATIONS_ON_BOOT}
       NODE_ENV: production

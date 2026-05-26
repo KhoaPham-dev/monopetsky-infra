@@ -4,22 +4,42 @@ services:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
 
   backend:
+    build:
+      context: ../monopetsky-backend
+      dockerfile: Dockerfile.dev
     environment:
       NODE_ENV: development
+    volumes:
+      - ../monopetsky-backend:/app
+      - /app/node_modules
     ports:
       - "${BACKEND_PORT:-5050}:${BACKEND_PORT:-5050}"
 
   frontend:
+    build:
+      context: ../monopetsky-frontend
+      dockerfile: Dockerfile.dev
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    volumes:
+      - ../monopetsky-frontend:/app
+      - /app/node_modules
+      - /app/.next
     ports:
       - "${FRONTEND_PORT:-5002}:${FRONTEND_PORT:-5002}"
 
   cms:
+    build:
+      context: ../monopetsky-cms
+      dockerfile: Dockerfile.dev
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    volumes:
+      - ../monopetsky-cms:/app
+      - /app/node_modules
+      - /app/.next
     ports:
       - "${CMS_PORT:-5001}:${CMS_PORT:-5001}"
 

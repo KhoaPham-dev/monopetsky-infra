@@ -64,6 +64,187 @@ The deploy scripts assume the four repos are checked out side-by-side under the 
    ./scripts/deploy.sh prod
    ```
 
+## VPS prerequisites
+
+Provision an Ubuntu 22.04+ LTS VPS (minimum 2 vCPU / 4GB RAM / 40GB disk) and prepare it manually before running any scripts in this repo. Do each step as `root` (or with `sudo`) unless noted.
+
+### 1. DNS
+
+Point A records at the VPS public IP for all hostnames you intend to use:
+
+- `monopetsky.example.com`, `api.monopetsky.example.com`, `cms.monopetsky.example.com`
+- Staging equivalents if applicable
+
+### 2. Base packages
+
+```sh
+apt-get update
+apt-get install -y ca-certificates curl gnupg ufw rsync git
+```
+
+### 3. GitHub CLI (`gh`)
+
+`gh` is used to authenticate and pull private repos during deployment. It isn't in the standard Ubuntu repos, so add GitHub's apt source first:
+
+```sh
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+  | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+apt-get update
+apt-get install -y gh
+```
+
+Authenticate once as the `deploy` user (after creating it in step 7):
+
+```sh
+gh auth login
+```
+
+### 4. Docker Engine + Compose plugin
+
+Follow the official Docker install guide for Ubuntu: <https://docs.docker.com/engine/install/ubuntu/>. After install, confirm:
+
+```sh
+docker --version
+docker compose version
+systemctl enable --now docker
+```
+
+### 5. Firewall (UFW)
+
+Allow only SSH, HTTP, and HTTPS:
+
+```sh
+ufw allow 22/tcp
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw enable
+```
+
+### 6. Swap (recommended on small VPSes)
+
+```sh
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+### 7. Deploy user
+
+Create a non-root user with `sudo` and `docker` group membership:
+
+```sh
+adduser --disabled-password --gecos "" deploy
+usermod -aG sudo,docker deploy
+newgrp docker # activate the change run from the deploy user
+mkdir -p /home/deploy/.ssh
+chmod 700 /home/deploy/.ssh
+touch /home/deploy/.ssh/authorized_keys
+chmod 600 /home/deploy/.ssh/authorized_keys
+chown -R deploy:deploy /home/deploy/.ssh
+```
+
+### 8. SSH key + lock down root
+
+From your laptop, append your public key to the deploy user's `authorized_keys` (e.g. `ssh-copy-id deploy@<vps-ip>` or paste the contents of `~/.ssh/id_ed25519.pub`). Verify `ssh deploy@<vps-ip>` works, then disable root login:
+
+```sh
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+systemctl restart ssh
+```
+
+---
+
+## TLS cert bootstrap
+
+Initial Let's Encrypt cert issuance uses certbot's `--standalone` mode (certbot opens its own port-80 server) writing into the same named volume nginx will later read from. After this, the running `certbot` compose service handles renewals automatically.
+
+The compose volume is named `<project>_letsencrypt`, where `<project>` is the directory name — typically `monopetsky-infra`. The commands below assume that.
+
+**a. Make sure the stack is down so port 80 is free:**
+
+```sh
+cd ~/monopetsky-infra
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod down 2>/dev/null || true
+```
+
+**b. Issue prod certs.** Run once for each hostname (replace `-d` values with your real domains and `--email` with yours):
+
+```sh
+# prod frontend
+docker run --rm -p 80:80 \
+  -v monopetsky-infra_letsencrypt:/etc/letsencrypt \
+  -v monopetsky-infra_letsencrypt_www:/var/www/certbot \
+  certbot/certbot:v3.0.1 certonly --standalone \
+  --email ops@example.com --agree-tos --no-eff-email \
+  -d monopetsky.example.com
+
+# prod backend
+docker run --rm -p 80:80 \
+  -v monopetsky-infra_letsencrypt:/etc/letsencrypt \
+  -v monopetsky-infra_letsencrypt_www:/var/www/certbot \
+  certbot/certbot:v3.0.1 certonly --standalone \
+  --email ops@example.com --agree-tos --no-eff-email \
+  -d api.monopetsky.example.com
+
+# prod CMS
+docker run --rm -p 80:80 \
+  -v monopetsky-infra_letsencrypt:/etc/letsencrypt \
+  -v monopetsky-infra_letsencrypt_www:/var/www/certbot \
+  certbot/certbot:v3.0.1 certonly --standalone \
+  --email ops@example.com --agree-tos --no-eff-email \
+  -d cms.monopetsky.example.com
+```
+
+**c. Verify the certs landed in the volume:**
+
+```sh
+docker run --rm -v monopetsky-infra_letsencrypt:/etc/letsencrypt alpine \
+  ls /etc/letsencrypt/live
+# expect a directory per hostname, each containing fullchain.pem + privkey.pem
+```
+
+---
+
+## Port map
+
+| Service  | dev (host) | staging (host) | prod (host) |
+|----------|------------|----------------|-------------|
+| Postgres | 5432       | (internal)     | (internal)  |
+| Backend  | 5050       | 5050           | 5050        |
+| Frontend | 5002       | 5002           | 5002        |
+| CMS      | 5001       | 5001           | 5001        |
+| nginx    | (off)      | 80, 443        | 80, 443     |
+
+In staging and prod, only nginx is reachable from the public internet — the FE/BE/CMS host ports are bound to localhost via the firewall (UFW only allows 22/80/443).
+
+---
+
+## Troubleshooting
+
+- **certbot "no certificate found"** on first start: TLS certs don't exist yet. Either issue them with the standalone command in the TLS cert bootstrap section above, or temporarily comment out the `listen 443 ssl` server blocks in `nginx/conf.d/monopetsky.conf`, deploy, then run a webroot-mode certbot via the running stack and uncomment.
+- **Backend health check failing**: check `./scripts/logs.sh <env> backend`. Common causes: `DATABASE_URL` wrong, `JWT_SECRET` unset, migrations failing (look for `psql:` errors).
+- **`npm ci` fails during build**: the repo's `package-lock.json` is out of sync. Run `npm install` locally, commit the updated lockfile.
+- **Frontend or CMS bakes wrong API URL**: `NEXT_PUBLIC_API_URL` is consumed at *build* time. After changing it, redeploying with `--no-build` will not pick it up — drop `--no-build`.
+- **Disk filling up**: `docker system prune -af --volumes` (careful — won't touch named volumes in use, but will drop unused images).
+
+### Rollback
+
+```sh
+git -C ~/monopetsky-backend  checkout <previous-good-sha>
+git -C ~/monopetsky-frontend checkout <previous-good-sha>
+git -C ~/monopetsky-cms      checkout <previous-good-sha>
+./scripts/deploy.sh prod --no-pull
+```
+
+---
+
 ## Subsequent deploys
 
 ```

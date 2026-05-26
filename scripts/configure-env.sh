@@ -122,17 +122,14 @@ prompt_until_valid "Let's Encrypt contact email" EMAIL is_valid_email
 
 if [ "${ENV}" = "prod" ]; then
     POSTGRES_DB_DEFAULT="monopetsky"
-    BACKEND_PORT="4000"
-    FRONTEND_PORT="3000"
-    CMS_PORT="3001"
     BACKUP_RETENTION_DAYS="30"
 else
     POSTGRES_DB_DEFAULT="monopetsky_staging"
-    BACKEND_PORT="4001"
-    FRONTEND_PORT="3010"
-    CMS_PORT="3011"
     BACKUP_RETENTION_DAYS="7"
 fi
+BACKEND_PORT="5050"
+FRONTEND_PORT="5002"
+CMS_PORT="5001"
 POSTGRES_USER="monopetsky"
 POSTGRES_DB="${POSTGRES_DB_DEFAULT}"
 

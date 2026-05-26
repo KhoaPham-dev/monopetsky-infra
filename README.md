@@ -299,23 +299,36 @@ scripts/restore-db.sh           # Restore from backup (destructive)
 scripts/logs.sh                 # Tail compose logs
 ```
 
-## Deploying with Cloudflare Tunnel
+## Alternative ingress: Cloudflare Tunnel (no public ports needed)
 
-`cloudflared` runs on the host and routes public traffic into the stack. nginx still handles internal routing between cloudflared and the containers.
+If you ingress via a host-side `cloudflared` instead of nginx + Let's Encrypt, Cloudflare terminates TLS at their edge and forwards plain HTTP to the containers — nginx and certbot are not needed.
 
-Point your tunnel ingress rules at the nginx ports:
+**Prerequisites:**
 
-| Public hostname | Tunnel target |
-|----------------|---------------|
-| `example.com` | `http://localhost:80` |
-| `cms.example.com` | `http://localhost:80` |
-| `api.example.com` | `http://localhost:80` |
+- `cloudflared` installed on the host and connected (shown as active in Cloudflare Zero Trust → Networks → Tunnels)
+- Tunnel **Public Hostnames** configured to point at the host's loopback ports:
 
-Then deploy normally:
+| Public hostname | Service |
+|----------------|---------|
+| `example.com` | `http://localhost:5002` |
+| `cms.example.com` | `http://localhost:5001` |
+| `api.example.com` | `http://localhost:5050` |
 
+- Cloudflare SSL/TLS mode set to **Full**
+
+**Deploy with the `--tunnel` flag:**
+
+```sh
+./scripts/deploy.sh prod --tunnel
 ```
-./scripts/configure-nginx.sh   # first time only
-./scripts/deploy.sh prod
+
+This stacks `docker-compose.tunnel.yml` on top of the prod override, which pushes `nginx` and `certbot` into the `disabled` profile so they don't start. The nginx config pre-flight check is also skipped.
+
+**Verify:**
+
+```sh
+curl -fsS http://localhost:5050/health   # local backend
+curl -fsS https://api.example.com/health # via the tunnel
 ```
 
 ## Notes

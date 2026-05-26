@@ -1,0 +1,28 @@
+# docker-compose.tunnel.yml
+# -------------------------------------------------------------------
+# Override file for setups where the operator runs `cloudflared`
+# (Cloudflare Tunnel) on the host machine, not inside Docker.
+#
+# Usage:
+#   ./scripts/deploy.sh prod --tunnel
+#
+# In tunnel mode:
+#   - Cloudflare terminates TLS at their edge.
+#   - Your host-installed cloudflared connects outbound to Cloudflare
+#     and forwards traffic to the containers via the host port bindings
+#     (prod/staging overrides bind them to 127.0.0.1:PORT).
+#   - nginx and certbot become unnecessary; they are pushed into the
+#     "disabled" Compose profile so they don't start.
+#
+# Configure the tunnel's public hostnames in the Cloudflare Zero Trust
+# dashboard to point at the host's localhost ports, e.g.:
+#   example.com        →  HTTP  http://localhost:5002
+#   cms.example.com    →  HTTP  http://localhost:5001
+#   api.example.com    →  HTTP  http://localhost:5050
+# -------------------------------------------------------------------
+
+services:
+  nginx:
+    profiles: ["disabled"]
+  certbot:
+    profiles: ["disabled"]

@@ -9,6 +9,7 @@
 #   scripts/deploy.sh <staging|prod>              # pull + build + up
 #   scripts/deploy.sh <staging|prod> --no-pull    # skip git pull
 #   scripts/deploy.sh <staging|prod> --no-build   # skip image rebuild
+#   scripts/deploy.sh <staging|prod> --tunnel     # disable nginx+certbot; use host-side cloudflared
 #
 # Assumes the four repos are checked out side-by-side:
 #   ~/monopetsky-infra/     (this repo)
@@ -24,16 +25,18 @@ ENV="${1:-}"
 shift || true
 case "${ENV}" in
     staging|prod) ;;
-    *) echo "Usage: $0 <staging|prod> [--no-pull] [--no-build]" >&2; exit 1 ;;
+    *) echo "Usage: $0 <staging|prod> [--no-pull] [--no-build] [--tunnel]" >&2; exit 1 ;;
 esac
 
 # ---------- Parse remaining flags ----------
 DO_PULL=true
 DO_BUILD=true
+USE_TUNNEL=false
 for arg in "$@"; do
     case "$arg" in
         --no-pull)  DO_PULL=false ;;
         --no-build) DO_BUILD=false ;;
+        --tunnel)   USE_TUNNEL=true ;;
         *) echo "Unknown arg: $arg" >&2; exit 1 ;;
     esac
 done
@@ -51,15 +54,19 @@ if [ ! -f "${ENV_FILE}" ]; then
     exit 1
 fi
 
-if [ ! -f "${NGINX_CONF}" ]; then
+if [ "${USE_TUNNEL}" != true ] && [ ! -f "${NGINX_CONF}" ]; then
     echo "ERROR: ${NGINX_CONF} not found — nginx config has not been rendered." >&2
     echo "       Run: ./scripts/configure-nginx.sh" >&2
+    echo "       Or use --tunnel to skip nginx entirely." >&2
     exit 1
 fi
 
 cd "${INFRA_DIR}"
 
 COMPOSE=(docker compose -f docker-compose.yml -f "docker-compose.${ENV}.yml" --env-file "${ENV_FILE}")
+if [ "${USE_TUNNEL}" = true ]; then
+    COMPOSE+=(-f docker-compose.tunnel.yml)
+fi
 
 # ---------- Pull latest code ----------
 if [ "${DO_PULL}" = true ]; then

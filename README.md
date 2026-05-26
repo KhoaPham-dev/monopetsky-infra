@@ -24,6 +24,7 @@ The deploy scripts assume the four repos are checked out side-by-side under the 
 | `nginx`     | `nginx:1.27-alpine`          | This IS the public ingress on :80 / :443 | Config rendered from `nginx/conf.d/monopetsky.conf.template` |
 | `certbot`   | `certbot/certbot:v3.0.1`     | -                      | Renews Let's Encrypt certs every 12h |
 | `db-backup` | `postgres:16-alpine`         | No                     | Nightly `pg_dump` at 02:00 UTC, retention from `BACKUP_RETENTION_DAYS` |
+| `cloudflared` | `cloudflare/cloudflared:latest` | Tunnel mode only — replaces nginx+certbot | Started automatically with `--tunnel`; requires `CLOUDFLARE_TUNNEL_TOKEN` |
 
 ## First-time setup on a fresh VPS
 
@@ -119,9 +120,27 @@ scripts/restore-db.sh           # Restore from backup (destructive)
 scripts/logs.sh                 # Tail compose logs
 ```
 
+## Cloudflare Tunnel mode
+
+An alternative to nginx + Let's Encrypt: terminate TLS at Cloudflare and run `cloudflared` as a Docker container alongside the other services.
+
+**Setup:**
+
+1. Create a tunnel in the Cloudflare dashboard and copy the tunnel token.
+2. Add `CLOUDFLARE_TUNNEL_TOKEN=<token>` to your `.env.prod` (or `.env.staging`).
+3. In the Cloudflare dashboard, configure ingress rules for the tunnel:
+   - `https://example.com` → `http://frontend:${FRONTEND_PORT}`
+   - `https://cms.example.com` → `http://cms:${CMS_PORT}`
+   - `https://api.example.com` → `http://backend:${BACKEND_PORT}`
+4. Deploy with the `--tunnel` flag:
+   ```
+   ./scripts/deploy.sh prod --tunnel
+   ```
+
+This activates `docker-compose.tunnel.yml`, which disables `nginx` and `certbot` and starts the `cloudflared` container on the `web_net` network. No separate host-side `cloudflared` process is needed.
+
 ## Notes
 
 - `nginx/conf.d/monopetsky.conf` and `.env`/`.env.staging`/`.env.prod` are gitignored — they're operator-local.
-- Backend ports are bound to `127.0.0.1` only via the prod/staging overrides; public access goes through nginx. Without this, Docker's iptables rules bypass UFW and expose the port.
-- Cloudflare Tunnel mode (`--tunnel`): if you'd rather terminate TLS at Cloudflare, run `cloudflared` on the host pointing at the bound localhost ports, and add `--tunnel` to `deploy.sh`. That disables nginx + certbot.
+- Backend ports are bound to `127.0.0.1` only via the prod/staging overrides; public access goes through nginx (or cloudflared in tunnel mode). Without this, Docker's iptables rules bypass UFW and expose the port.
 - The backend's `/uploads/*` static route has `Cross-Origin-Resource-Policy: cross-origin` so the CMS and storefront on other subdomains can render uploaded images.

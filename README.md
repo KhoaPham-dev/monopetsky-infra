@@ -299,6 +299,47 @@ scripts/restore-db.sh           # Restore from backup (destructive)
 scripts/logs.sh                 # Tail compose logs
 ```
 
+## Deploying with Cloudflare Tunnel (host-side cloudflared)
+
+If `cloudflared` is already running on the host machine (not as a Docker container), nginx and certbot are still used inside the stack — but you point the Cloudflare tunnel ingress rules at `localhost` instead of a public domain.
+
+**Setup:**
+
+1. On the host, install and authenticate `cloudflared`:
+   ```
+   curl -L https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-archive-keyring.gpg
+   # then install cloudflared via apt/yum and run:
+   cloudflared tunnel login
+   cloudflared tunnel create monopetsky
+   ```
+
+2. Configure tunnel ingress in `~/.cloudflared/config.yml`:
+   ```yaml
+   tunnel: <tunnel-id>
+   credentials-file: /root/.cloudflared/<tunnel-id>.json
+   ingress:
+     - hostname: example.com
+       service: http://localhost:5002
+     - hostname: cms.example.com
+       service: http://localhost:5001
+     - hostname: api.example.com
+       service: http://localhost:5050
+     - service: http_status:404
+   ```
+
+3. Run the tunnel as a system service:
+   ```
+   cloudflared service install
+   systemctl start cloudflared
+   ```
+
+4. Deploy the stack normally (no special flag needed — nginx handles internal routing, cloudflared handles public TLS):
+   ```
+   ./scripts/deploy.sh prod
+   ```
+
+   > nginx is still required for internal request routing between cloudflared and the containers. Run `./scripts/configure-nginx.sh` before the first deploy.
+
 ## Notes
 
 - `nginx/conf.d/monopetsky.conf` and `.env`/`.env.staging`/`.env.prod` are gitignored — they're operator-local.

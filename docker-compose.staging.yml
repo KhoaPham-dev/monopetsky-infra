@@ -2,7 +2,7 @@ services:
   backend:
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${BACKEND_PORT:-4001}:${BACKEND_PORT:-4001}"
+      - "127.0.0.1:${BACKEND_PORT:-5050}:${BACKEND_PORT:-5050}"
     logging:
       driver: json-file
       options:
@@ -12,7 +12,7 @@ services:
   frontend:
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-3010}:${FRONTEND_PORT:-3010}"
+      - "127.0.0.1:${FRONTEND_PORT:-5002}:${FRONTEND_PORT:-5002}"
     logging:
       driver: json-file
       options:
@@ -22,7 +22,7 @@ services:
   cms:
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${CMS_PORT:-3011}:${CMS_PORT:-3011}"
+      - "127.0.0.1:${CMS_PORT:-5001}:${CMS_PORT:-5001}"
     logging:
       driver: json-file
       options:

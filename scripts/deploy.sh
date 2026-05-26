@@ -92,6 +92,26 @@ fi
 echo "[deploy] bringing stack up (${ENV})"
 "${COMPOSE[@]}" up -d
 
+# ---------- Sync postgres user password ----------
+# Runs ALTER USER so the DB password always matches .env regardless of whether
+# the postgres volume was pre-existing or freshly created.
+echo "[deploy] syncing postgres user password..."
+POSTGRES_USER="$(grep -E '^POSTGRES_USER=' "${ENV_FILE}" | cut -d= -f2)"
+POSTGRES_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' "${ENV_FILE}" | cut -d= -f2)"
+POSTGRES_USER="${POSTGRES_USER:-monopetsky}"
+for i in $(seq 1 15); do
+    if "${COMPOSE[@]}" exec -T postgres \
+        psql -U "${POSTGRES_USER}" -c "ALTER USER ${POSTGRES_USER} PASSWORD '${POSTGRES_PASSWORD}';" \
+        >/dev/null 2>&1; then
+        echo "[deploy] postgres password synced."
+        break
+    fi
+    sleep 2
+    if [ "$i" -eq 15 ]; then
+        echo "[deploy] WARNING: could not sync postgres password — postgres may not be ready" >&2
+    fi
+done
+
 # ---------- Wait for backend health ----------
 echo "[deploy] waiting for backend health..."
 BACKEND_PORT="$(grep -E '^BACKEND_PORT=' "${ENV_FILE}" | cut -d= -f2)"

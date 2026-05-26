@@ -1,15 +1,43 @@
 # docker-compose.tunnel.yml
 # -------------------------------------------------------------------
-# Override for setups where the operator runs `cloudflared` on the host
-# instead of terminating TLS in nginx. Pushes nginx + certbot into the
-# disabled profile.
+# Override for Cloudflare Tunnel deployments.
+# Runs cloudflared as a container — no nginx or certbot needed.
 #
 # Usage:
 #   ./scripts/deploy.sh prod --tunnel
+#
+# Requirements:
+#   CLOUDFLARE_TUNNEL_TOKEN must be set in .env
+#   Configure tunnel ingress in Cloudflare dashboard to route to:
+#     - http://frontend:${FRONTEND_PORT}
+#     - http://cms:${CMS_PORT}
+#     - http://backend:${BACKEND_PORT}
 # -------------------------------------------------------------------
 
 services:
   nginx:
     profiles: ["disabled"]
+
   certbot:
     profiles: ["disabled"]
+
+  cloudflared:
+    image: cloudflare/cloudflared:2025.4.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      cms:
+        condition: service_started
+    networks:
+      - web_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "10"
